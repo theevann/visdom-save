@@ -1,23 +1,23 @@
 #! /usr/bin/env python
 
 import visdom
-import copy
+import argparse
 import json
 import os
-import argparse
 
 
-def create_log(current_env, new_env=None):
+# SAVING
+
+def create_log_at(file_path, current_env, new_env=None):
     new_env = current_env if new_env is None else new_env
     vis = visdom.Visdom(env=current_env)
+
     data = json.loads(vis.get_window_data())
     if len(data) == 0:
         print("NOTHING HAS BEEN SAVED: NOTHING IN THIS ENV - DOES IT EXIST ?")
         return
 
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    file = open(dir_path + '/log/' + new_env + '.log', 'w+')
-
+    file = open(file_path, 'w+')
     for datapoint in data.values():
         output = {
             'win': datapoint['id'],
@@ -40,42 +40,53 @@ def create_log(current_env, new_env=None):
     file.close()
 
 
+def create_log(current_env, new_env=None):
+    new_env = current_env if new_env is None else new_env
+    dir_path = os.getcwd()
+    if not os.path.exists(dir_path + '/log'):
+        os.makedirs(dir_path + '/log')
+    file_path = dir_path + '/log/' + new_env + '.log'
+    create_log_at(file_path, current_env, new_env)
+
+
+# LOADING
+
+def load_log_at(path):
+    visdom.Visdom().replay_log(path)
+
+
 def load_log(env):
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    vis = visdom.Visdom(env=env)
-    vis.replay_log(dir_path + '/log/' + env + '.log')
+    dir_path = os.getcwd()
+    load_log_at(dir_path + '/log/' + env + '.log')
 
 
 def load_all_log():
-    dir_path = os.path.dirname(os.path.realpath(__file__)) + '/log/'
+    dir_path = os.getcwd() + '/log/'
     logs = os.listdir(dir_path)
     vis = visdom.Visdom()
     for log in logs:
         vis.replay_log(dir_path + log)
 
 
-def load_log_at(path):
-    file = os.path.basename(path)
-    env = os.path.splitext(file)[0]
-    vis = visdom.Visdom(env=env)
-    vis.replay_log(path)
-
+# MAIN
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=('Load and Save from Visdom'))
     parser.add_argument('-s', '--save', type=str, help='env_name', default='')
-    parser.add_argument('-l', '--load', type=str, help='env_name', default='')
-    parser.add_argument('-lf', '--load-file', type=str, help='path_to_log', default='')
+    parser.add_argument('-l', '--load', type=str, help='env_name', default='', nargs="?")
+    parser.add_argument('-f', '--file', type=str, help='path_to_log_file', default='')
     args = parser.parse_args()
 
     if args.save is not '':
-        create_log(args.save)
+        if args.file is not '':
+            create_log_at(args.file, args.save)
+        else:
+            create_log(args.save)
 
     if args.load is not '':
         if args.load == 'all':
             load_all_log()
-        else:
+        elif args.load is not None:
             load_log(args.load)
-
-    if args.load_file is not '':
-        load_log_at(args.load_file)
+        elif args.file is not '':
+            load_log_at(args.file)
